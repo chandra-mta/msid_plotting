@@ -13,7 +13,15 @@ import maude
 
 from datetime import datetime, timedelta, time
 from pprint import pformat
+import numexpr as ne
+import numpy as np
 
+_T1998 = 883612736.816 #: Difference between Chandra and Epoch Time
+
+@np.vectorize
+def _vecdatetime(x):
+    if isinstance(x, (int,float)):
+        return datetime.fromtimestamp(round(x))
 
 class MSIDPlot(object):
     """
@@ -43,6 +51,17 @@ class MSIDPlot(object):
             stop = self.stop
         )
 
+    def _to_datetime(self, forcerun=False):
+        """
+        Fast numerical conversions to format cxosecs into Bokeh-plottable datetimes
+        """
+        if not hasattr(self, '_datetimes') or forcerun:
+            _datetimes = {}
+            for idx in range(len(self.msids)): #: fetch result indexed by 
+                _msid = self.fetch_result['data'][idx]['msid']
+                _time = self.fetch_result['data'][idx]['times'] #: cxosecs
+                _datetimes[_msid] = _vecdatetime(ne.evaluate("round(_time + _T1998)"))
+            self._datetimes = _datetimes
 
 class CommCheck(object):
     """
