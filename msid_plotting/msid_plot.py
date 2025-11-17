@@ -9,6 +9,8 @@ Plotting classes for multivariate MSID plots using bokeh for interactivity.
 """
 import kadi.events
 from cxotime import CxoTime
+import maude
+
 from datetime import datetime, timedelta, time
 from pprint import pformat
 
@@ -17,7 +19,7 @@ class MSIDPlot(object):
     """
     Class for Plotting parameters of Multivariate MSID interactive plot
     """
-    def __init__(self,msids):
+    def __init__(self,msids, start, stop):
         """
         Initialization
         """
@@ -28,6 +30,19 @@ class MSIDPlot(object):
         else:
             raise Exception("MSIDPlot input but be an MSID or a list of MSIDs.")
         
+        self.start = start
+        self.stop = stop
+
+    def fetch_maude(self):
+        """
+        Fetch the MSID telemetry from the maude server.
+        """
+        self.fetch_result = maude. get_msids(
+            msids = self.msids,
+            start = self.start,
+            stop = self.stop
+        )
+
 
 class CommCheck(object):
     """
