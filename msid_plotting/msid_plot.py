@@ -9,15 +9,25 @@ Plotting classes for multivariate MSID plots using bokeh for interactivity.
 """
 import kadi.events
 from cxotime import CxoTime
+import maude
+
 from datetime import datetime, timedelta, time
 from pprint import pformat
+import numexpr as ne
+import numpy as np
 
+_T1998 = 883612736.816 #: Difference between Chandra and Epoch Time
+
+@np.vectorize
+def _vecdatetime(x):
+    if isinstance(x, (int,float)):
+        return datetime.fromtimestamp(round(x))
 
 class MSIDPlot(object):
     """
     Class for Plotting parameters of Multivariate MSID interactive plot
     """
-    def __init__(self,msids):
+    def __init__(self,msids, start, stop):
         """
         Initialization
         """
@@ -28,6 +38,30 @@ class MSIDPlot(object):
         else:
             raise Exception("MSIDPlot input but be an MSID or a list of MSIDs.")
         
+        self.start = start
+        self.stop = stop
+
+    def fetch_maude(self):
+        """
+        Fetch the MSID telemetry from the maude server.
+        """
+        self.fetch_result = maude. get_msids(
+            msids = self.msids,
+            start = self.start,
+            stop = self.stop
+        )
+
+    def _to_datetime(self, forcerun=False):
+        """
+        Fast numerical conversions to format cxosecs into Bokeh-plottable datetimes
+        """
+        if not hasattr(self, '_datetimes') or forcerun:
+            _datetimes = {}
+            for idx in range(len(self.msids)): #: fetch result indexed by 
+                _msid = self.fetch_result['data'][idx]['msid']
+                _time = self.fetch_result['data'][idx]['times'] #: cxosecs
+                _datetimes[_msid] = _vecdatetime(ne.evaluate("round(_time + _T1998)"))
+            self._datetimes = _datetimes
 
 class CommCheck(object):
     """
