@@ -12,9 +12,11 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy import create_engine
 
 GLIMMON = "/data/mta/Script/MSID_limit/glimmondb.sqlite3"
+_ECHO = False
 
 class Base(DeclarativeBase):
     pass
+
 class Limits(Base):
     """
     SQLAlchemy ORM of Glimmon databse. Subject to schema decisions of OPS
@@ -44,4 +46,17 @@ class Limits(Base):
         return {c.name: getattr(self, c.name) for c in self.__table__.columns}
 
     def __repr__(self) -> str:
-         return f"Limits(id={self.id!r}, msid={self.msid!r}, caution=[{self.caution_low!r},{self.caution_high!r}], warning=[{self.warning_low!r},{self.warning_high!r}])"
+         return f"Limits(id={self.id!r}, setkey={self.setkey!r}, msid={self.msid!r}, caution=[{self.caution_low:.3g},{self.caution_high:.3g}], warning=[{self.warning_low:.3g},{self.warning_high:.3g}], date={self.date!r})"
+    
+def _session_lim():
+    engine = create_engine(f"sqlite:///{GLIMMON}", echo=_ECHO)
+    return sessionmaker(bind=engine)
+
+def fetch_msid_limits(msids):
+    Session = _session_lim()
+    with Session() as session:
+        limits = {}
+        for msid in msids:
+            limits[msid] = session.query(Limits).filter(Limits.msid == msid).order_by(Limits.datesec).all()[-1]
+        session.close()
+    return limits
