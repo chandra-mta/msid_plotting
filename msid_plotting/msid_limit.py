@@ -10,17 +10,21 @@ from sqlalchemy.orm import mapped_column
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import create_engine
 
+from typing import List
+
 GLIMMON = "/data/mta/Script/MSID_limit/glimmondb.sqlite3"
 _ECHO = False
 
 class Base(DeclarativeBase):
     pass
 
-class Limits(Base):
+class Limit(Base):
     """
     SQLAlchemy ORM of Glimmon databse. Subject to schema decisions of OPS
     
     https://occweb.cfa.harvard.edu/twiki/bin/view/ChandraCode/G_LIMMONSQLite3Database
+
+    :NOTE: Glimmon stores MSID's in lowercase.
     """
     __tablename__ = "limits"
     
@@ -51,11 +55,11 @@ def _session_lim():
     engine = create_engine(f"sqlite:///{GLIMMON}", echo=_ECHO)
     return sessionmaker(bind=engine)
 
-def fetch_msid_limits(msids):
+def fetch_msid_limits(msids : List[str]) -> dict[str, Limit]:
     Session = _session_lim()
     with Session() as session:
         limits = {}
         for msid in msids:
-            limits[msid] = session.query(Limits).filter(Limits.msid == msid).order_by(Limits.datesec).all()[-1]
+            limits[msid] = session.query(Limit).filter(Limit.msid == msid.lower()).order_by(Limit.datesec).all()[-1]
         session.close()
     return limits
