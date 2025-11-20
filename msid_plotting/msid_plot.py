@@ -7,6 +7,8 @@ Plotting classes for multivariate MSID plots using bokeh for interactivity.
     however they are not tailored for scripts, multivariate, or specifics of web services.
     This may change with future developments, in which case consider conforming to Ska3 standard.
 """
+import msid_limit
+
 #: Ska3
 import kadi.events
 from cxotime import CxoTime
@@ -29,15 +31,12 @@ def _vecdatetime(x):
 
 class MSIDPlot(object):
     """
-    Class for Plotting parameters of Multivariate MSID interactive plot
+    Class for plotting parameters of Multivariate MSID interactive plot
     """
     #: Type Hint
     fetch_result : dict[str, Any]
 
     def __init__(self,msids, start, stop):
-        """
-        Initialization
-        """
         if isinstance(msids, list):
             self.msids = [_.upper() for _ in msids]
         elif isinstance(msids, str):
@@ -48,7 +47,7 @@ class MSIDPlot(object):
         self.start = start
         self.stop = stop
 
-    def fetch_maude(self):
+    def fetch_maude(self) -> None:
         """
         Fetch the MSID telemetry from the maude server.
         """
@@ -58,12 +57,14 @@ class MSIDPlot(object):
             stop = self.stop
         )
     
-    def fetch_limit(self):
+    def fetch_limit(self) -> None:
         """
-        Use the limit API to
+        Use the limit API to fetch and set limits for the current msid set.
         """
+        _limits = msid_limit.fetch_msid_limits(self.msids)
+        self.limits = _limits
 
-    def _to_datetime(self, forcerun=False):
+    def _to_datetime(self, forcerun=False) -> None:
         """
         Fast numerical conversions to format cxosecs into Bokeh-plottable datetimes
         """
