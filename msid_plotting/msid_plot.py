@@ -7,16 +7,20 @@ Plotting classes for multivariate MSID plots using bokeh for interactivity.
     however they are not tailored for scripts, multivariate, or specifics of web services.
     This may change with future developments, in which case consider conforming to Ska3 standard.
 """
+#: Ska3
 import kadi.events
 from cxotime import CxoTime
 import maude
-
+#: Calculation
 from datetime import datetime, timedelta, time
-from pprint import pformat
 import numexpr as ne
 import numpy as np
+#: Formatting
+from typing import Any, cast
+from pprint import pformat
 
 _T1998 = 883612736.816 #: Difference between Chandra and Epoch Time
+
 
 @np.vectorize
 def _vecdatetime(x):
@@ -27,6 +31,9 @@ class MSIDPlot(object):
     """
     Class for Plotting parameters of Multivariate MSID interactive plot
     """
+    #: Type Hint
+    fetch_result : dict[str, Any]
+
     def __init__(self,msids, start, stop):
         """
         Initialization
@@ -45,11 +52,16 @@ class MSIDPlot(object):
         """
         Fetch the MSID telemetry from the maude server.
         """
-        self.fetch_result = maude. get_msids(
+        self.fetch_result = maude.get_msids(
             msids = self.msids,
             start = self.start,
             stop = self.stop
         )
+    
+    def fetch_limit(self):
+        """
+        Use the limit API to
+        """
 
     def _to_datetime(self, forcerun=False):
         """
@@ -91,10 +103,12 @@ class CommCheck(object):
         self.in_track = False
         self.comm = self.dsn_query[0]
         #: Identify Track Time (Data exchange during track during)
-        _start = CxoTime(self.comm.start)
-        _stop = CxoTime(self.comm.stop)
+        _start = cast(CxoTime, CxoTime(self.comm.start))
+        _stop = cast(CxoTime, CxoTime(self.comm.stop))
+
         #: Start
-        _track_start = CxoTime(datetime.combine(_start.datetime.date(),
+        _dt_start = cast(datetime, _start.datetime)
+        _track_start = CxoTime(datetime.combine(_dt_start.date(),
                                                 time(hour = int(self.comm.bot[:2]),
                                                      minute = int(self.comm.bot[2:])
                                                     )
@@ -103,8 +117,10 @@ class CommCheck(object):
         
         if _track_start < _start: #: Time after midnight
             _track_start += timedelta(days=1)
+        
         #: Stop
-        _track_stop = CxoTime(datetime.combine(_stop.datetime.date(),
+        _dt_stop = cast(datetime, _stop.datetime)
+        _track_stop = CxoTime(datetime.combine(_dt_stop.date(),
                                                 time(hour = int(self.comm.eot[:2]),
                                                      minute = int(self.comm.eot[2:])
                                                     )
