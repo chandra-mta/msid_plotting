@@ -32,6 +32,8 @@ def _vecdatetime(x):
 class MSIDPlot(object):
     """
     Class for plotting parameters of Multivariate MSID interactive plot
+
+    :NOTE: Maude stores MSID's in uppercase
     """
     #: Type Hint
     fetch_result : dict[str, Any]
@@ -42,7 +44,7 @@ class MSIDPlot(object):
         elif isinstance(msids, str):
             self.msids = [msids.upper()]
         else:
-            raise Exception("MSIDPlot input but be an MSID or a list of MSIDs.")
+            raise Exception("MSIDPlot input must be an MSID or a list of MSIDs.")
         
         self.start = start
         self.stop = stop
@@ -70,7 +72,7 @@ class MSIDPlot(object):
         """
         if not hasattr(self, '_datetimes') or forcerun:
             _datetimes = {}
-            for idx in range(len(self.msids)): #: fetch result indexed by 
+            for idx in range(len(self.msids)): #: fetch result indexed by integers from provided msid iterable
                 _msid = self.fetch_result['data'][idx]['msid']
                 _time = self.fetch_result['data'][idx]['times'] #: cxosecs
                 _datetimes[_msid] = _vecdatetime(ne.evaluate("_time + _T1998"))

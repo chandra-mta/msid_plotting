@@ -23,6 +23,8 @@ class Limit(Base):
     SQLAlchemy ORM of Glimmon databse. Subject to schema decisions of OPS
     
     https://occweb.cfa.harvard.edu/twiki/bin/view/ChandraCode/G_LIMMONSQLite3Database
+
+    :NOTE: Glimmon stores MSID's in lowercase.
     """
     __tablename__ = "limits"
     
@@ -58,6 +60,6 @@ def fetch_msid_limits(msids : List[str]) -> dict[str, Limit]:
     with Session() as session:
         limits = {}
         for msid in msids:
-            limits[msid] = session.query(Limit).filter(Limit.msid == msid).order_by(Limit.datesec).all()[-1]
+            limits[msid] = session.query(Limit).filter(Limit.msid == msid.lower()).order_by(Limit.datesec).all()[-1]
         session.close()
     return limits
