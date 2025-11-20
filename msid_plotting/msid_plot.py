@@ -60,7 +60,7 @@ class MSIDPlot(object):
             for idx in range(len(self.msids)): #: fetch result indexed by 
                 _msid = self.fetch_result['data'][idx]['msid']
                 _time = self.fetch_result['data'][idx]['times'] #: cxosecs
-                _datetimes[_msid] = _vecdatetime(ne.evaluate("round(_time + _T1998)"))
+                _datetimes[_msid] = _vecdatetime(ne.evaluate("_time + _T1998"))
             self._datetimes = _datetimes
 
 class CommCheck(object):
