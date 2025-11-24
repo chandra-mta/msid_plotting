@@ -77,7 +77,7 @@ class MSIDPlot(object):
         """
         Use the limit API to fetch and set limits for the current msid set.
         """
-        _limits = msid_limit.fetch_msid_limits(self.msids)
+        _limits = msid_limit.query_msid_limits(self.msids)
         self.limits = _limits
 
     def generate_plot_html(self) -> str:

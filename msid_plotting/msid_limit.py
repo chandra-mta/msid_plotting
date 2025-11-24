@@ -7,8 +7,8 @@ Glimmon database interface using SQLAlchemy ORM with additional functions.
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.orm import Mapped
 from sqlalchemy.orm import mapped_column
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy import create_engine, or_, and_
 
 from typing import List
 
@@ -50,16 +50,51 @@ class Limit(Base):
 
     def __repr__(self) -> str:
          return f"Limits(id={self.id!r}, setkey={self.setkey!r}, msid={self.msid!r}, caution=[{self.caution_low:.3g},{self.caution_high:.3g}], warning=[{self.warning_low:.3g},{self.warning_high:.3g}], date={self.date!r})"
-    
-def _session_lim():
-    engine = create_engine(f"sqlite:///{GLIMMON}", echo=_ECHO)
-    return sessionmaker(bind=engine)
 
-def fetch_msid_limits(msids : List[str]) -> dict[str, Limit]:
-    Session = _session_lim()
-    with Session() as session:
-        limits = {}
+class LimSession(object):
+    """
+    Singleton class for accessing the Glimmon limit database interface with the same engine and session maker.
+    """
+    _instance = None
+
+    def __new__(cls, *args, **kwargs):
+        if cls._instance is None:
+            #: If no CommCheck instance exists, create a new one
+            cls._instance = super().__new__(cls)
+        return cls._instance  #: Return the existing instance
+
+    def __init__(self):
+        if not hasattr(self, "_initialized"):  #: Prevent re-initialization
+            self._initialized = True
+            self.engine = create_engine(f"sqlite:///{GLIMMON}", echo=_ECHO)
+            self.session_maker = sessionmaker(bind=self.engine)
+    
+    def __call__(self):
+        return self.session_maker()
+
+
+def query_switch(msids : List[str]) -> List[str]:
+    """
+    Specialized MSID query for the set of switch limits msids for a provided set of msids.
+    In effect, this build's out additional msids needed from maude to determine the desired limit.
+
+    Msid's which have no switch are explicitly recorded as none.
+    Therefore, if there are none need by provided msids, returns empty list
+    """
+    session : Session
+
+    limsession = LimSession()
+    with limsession() as session:
+        switch_or = or_(*[Limit.msid == _ for _ in msids])
+        result = session.query(Limit.mlimsw).filter(switch_or).distinct().all()
+        switch_list = [i[0] for i in result if i != 'none']
+    return switch_list
+
+def query_msid_limits(msids : List[str]) -> dict[str, Limit]:
+
+    limsession = LimSession()
+    limits = {}
+    with limsession() as session:
         for msid in msids:
             limits[msid] = session.query(Limit).filter(Limit.msid == msid.lower()).order_by(Limit.datesec).all()[-1]
-        session.close()
     return limits
