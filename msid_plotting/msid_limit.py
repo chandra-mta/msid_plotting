@@ -90,11 +90,11 @@ def query_switch(msids : List[str]) -> List[str]:
         switch_list = [i[0] for i in result if i != 'none']
     return switch_list
 
-def query_msid_limits(msids : List[str]) -> dict[str, Limit]:
+def query_msid_limits(msids : List[str]) -> dict[str, List[Limit]]:
 
     limsession = LimSession()
     limits = {}
     with limsession() as session:
         for msid in msids:
-            limits[msid] = session.query(Limit).filter(Limit.msid == msid.lower()).order_by(Limit.datesec).all()[-1]
+            limits[msid] = session.query(Limit).filter(Limit.msid == msid.lower()).order_by(Limit.datesec).all()
     return limits
