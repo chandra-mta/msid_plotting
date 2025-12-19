@@ -19,11 +19,12 @@ import maude
 from datetime import datetime, timedelta, time
 import numexpr as ne
 import numpy as np
+import os
 
 #: Formatting
 from typing import Any, cast, List
 from pprint import pformat
-from jinja2 import Environment, PackageLoader
+from jinja2 import Environment, PackageLoader, FileSystemLoader, ChoiceLoader
 
 #: Plotting
 from bokeh.plotting import figure  #: 1.89usec
@@ -128,6 +129,42 @@ class MSIDPlot(object):
                 _datetimes[_msid] = _vecdatetime(ne.evaluate("_time + _T1998"))
             self._datetimes = _datetimes
 
+class JinjaTemplateEnv(object):
+    """
+    Singleton class for Jinja Enviroment tempaltes with additional template handling methods
+    """
+    _instance = None
+
+    def __new__(cls, *args, **kwargs):
+        if cls._instance is None:
+            #: If no TemplateEnv instance exists, create a new one
+            cls._instance = super().__new__(cls)
+        return cls._instance  #: Return the existing instance
+
+    def __init__(self):
+        if not hasattr(self, "_initialized"):  #: Prevent re-initialization
+            self._initialized = True
+            self.env = Environment(loader=ChoiceLoader([
+                                     PackageLoader("msid_plotting", "template"),
+                                     ]))
+    def _add_loader(self, loader) -> None:
+        """
+        Allows for adding additional Jinja Loaders, but common usage is a file path for FileSystemLoader
+        """
+        self.env.loader.loaders.append(loader) # type: ignore
+    
+    def add_template_directory(self, filepath : str, **kwargs) -> None:
+        """
+        Add another template directory to the jinja templater.
+        """
+        if os.path.isdir(filepath):
+            _loader = FileSystemLoader(filepath, **kwargs)
+            self._add_loader(_loader)
+        else:
+            if os.path.isfile(filepath):
+                raise FileNotFoundError("Specified path is not a directory.")
+            if os.path.isfile(filepath):
+                raise FileNotFoundError(f"Could not find filepath: {filepath}")
 
 class CommCheck(object):
     """
