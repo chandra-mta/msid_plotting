@@ -186,12 +186,31 @@ class MSIDPlot(object):
         )
         return fetch_result
     
-    def fetch_maude(self) -> None:
+    def fetch_data(self, bin_size = 500, forcerun = False) -> None:
         """
         Fetch the MSID Plot telemetry from the maude server and assign the raw fetch result
         """
-        self.fetch_result = self._query_maude(msids=self.msids)
+        if not hasattr(self, 'fetch_result') or forcerun:
+            self.fetch_result = self._query_maude(msids=self.msids)
+
+        values = {}
+        datetimes = {}
+        for result in self.fetch_result['data']:
+            #: Downsample Step
+            if bin_size is not None:
+                _slice_step = result['n_values'] // bin_size
+                if _slice_step == 0:
+                    _slice_step = 1
+            else:
+                _slice_step = 1
+            
+            values[result['msid']] = result['values'][::_slice_step]
+            _cxotimes = result['times'][::_slice_step]
+            #: Fast numerical conversions to format cxosecs into Bokeh-plottable datetimes
+            datetimes[result['msid']] = _vecdatetime(ne.evaluate("_cxotimes + _T1998"))
         
+        self.values = values
+        self.datetimes = datetimes
 
     def fetch_limit(self) -> None:
         """
@@ -204,9 +223,9 @@ class MSIDPlot(object):
     def _generate_frames(self) -> List[Any]:
         frames = []
 
-        for i, msid in enumerate(self.msids):
+        for msid in self.msids:
             p = figure(title="Test", y_axis_label=msid,x_axis_label="Date", x_axis_type = 'datetime')
-            p.scatter(x=self._datetimes[msid], y=self.fetch_result["data"][i]["values"])
+            p.scatter(x=self.datetimes[msid], y=self.values[msid])
 
             p.xaxis.formatter = DatetimeTickFormatter(
                 minutes="%Y:%j:%H:%M",
@@ -232,17 +251,3 @@ class MSIDPlot(object):
         html = file_html(plot, CDN, template=template)
 
         return html
-
-    def _to_datetime(self, forcerun=False) -> None:
-        """
-        Fast numerical conversions to format cxosecs into Bokeh-plottable datetimes
-        """
-        if not hasattr(self, "_datetimes") or forcerun:
-            _datetimes = {}
-            for idx in range(
-                len(self.msids)
-            ):  #: fetch result indexed by integers from provided msid iterable
-                _msid = self.fetch_result["data"][idx]["msid"]
-                _time = self.fetch_result["data"][idx]["times"]  #: cxosecs
-                _datetimes[_msid] = _vecdatetime(ne.evaluate("_time + _T1998"))
-            self._datetimes = _datetimes
