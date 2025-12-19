@@ -21,7 +21,7 @@ import numexpr as ne
 import numpy as np
 
 #: Formatting
-from typing import Any, cast
+from typing import Any, cast, List
 from pprint import pformat
 from jinja2 import Environment, PackageLoader
 
@@ -86,7 +86,8 @@ class MSIDPlot(object):
         _limits = msid_limit.query_msid_limits(self.msids)
         self.limits = _limits
 
-    def generate_plot_html(self) -> str:
+
+    def _generate_frames(self) -> List[Any]:
         frames = []
 
         for i, msid in enumerate(self.msids):
@@ -101,7 +102,13 @@ class MSIDPlot(object):
             )
 
             frames.append([p])
-
+        return frames
+        
+    def generate_plot_html(self) -> str:
+        """
+        Generate plot frames and write the contents into a python jinja template.
+        """
+        frames = self._generate_frames()
         plot = gridplot(frames)
         html = file_html(plot, CDN, template=_TEMPLATE)
 
