@@ -64,14 +64,20 @@ class MSIDPlot(object):
 
         self.start = start
         self.stop = stop
+    
+    def _query_maude(self, msids, **kwargs) -> dict:
 
+        fetch_result = maude.get_msids(
+            msids=msids, start=self.start, stop=self.stop, **kwargs
+        )
+        return fetch_result
+    
     def fetch_maude(self) -> None:
         """
-        Fetch the MSID telemetry from the maude server.
+        Fetch the MSID Plot telemetry from the maude server and assign the raw fetch result
         """
-        self.fetch_result = maude.get_msids(
-            msids=self.msids, start=self.start, stop=self.stop
-        )
+        self.fetch_result = self._query_maude(msids=self.msids)
+        
 
     def fetch_limit(self) -> None:
         """
