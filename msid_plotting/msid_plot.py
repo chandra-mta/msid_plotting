@@ -74,7 +74,7 @@ class JinjaTemplateEnv(object):
         else:
             if os.path.isfile(filepath):
                 raise FileNotFoundError("Specified path is not a directory.")
-            if os.path.isfile(filepath):
+            else:
                 raise FileNotFoundError(f"Could not find filepath: {filepath}")
 
 JINJA_TEMPLATE_ENV = JinjaTemplateEnv()
