@@ -59,7 +59,7 @@ class LimSession(object):
 
     def __new__(cls, *args, **kwargs):
         if cls._instance is None:
-            #: If no CommCheck instance exists, create a new one
+            #: If no LimSession instance exists, create a new one
             cls._instance = super().__new__(cls)
         return cls._instance  #: Return the existing instance
 
