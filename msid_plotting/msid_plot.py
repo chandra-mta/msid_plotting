@@ -30,10 +30,13 @@ from jinja2 import Environment, PackageLoader, FileSystemLoader, ChoiceLoader
 from bokeh.plotting import figure  #: 1.89usec
 from bokeh.layouts import gridplot  #: 1.83 usec
 from bokeh.models import DatetimeTickFormatter  #: 1.7 usec
+from bokeh.palettes import Plasma5 #5.82 usec
 from bokeh.resources import CDN
 from bokeh.embed import file_html
 
 _T1998 = 883612736.816  #: Difference between Chandra and Epoch Time
+_VIOLATION_LABELS = ['Normal', 'High Yellow', 'Low Yellow', 'High Red', 'Low Red']
+_VIOALTION_COLORS = [Plasma5[0], Plasma5[4], Plasma5[3], Plasma5[2], Plasma5[1]]
 
 @np.vectorize
 def _vecdatetime(x):
@@ -49,6 +52,27 @@ def _resize(alpha, beta):
             return beta
         else:
             return beta
+
+def _ind(_val,_lim):
+    """
+    :NOTE: The limit indicators are marked with integers for a set of preconfigured possible options
+            - ind = 0 : No Limit Violation
+            - ind = 1 : Value in Caution / Yellow High
+            - ind = 2 : Value in Caution / Yellow Low
+            - ind = 3 : Value in Warning / Red High
+            - ind = 4 : Value in Warning / Red Low
+    """
+    ind = 0
+    if _lim is not None:
+        if _val >= _lim.caution_high:
+            ind = 1
+        if _val <= _lim.caution_low:
+            ind = 2
+        if _val >= _lim.warning_high:
+            ind = 3
+        if _val <= _lim.warning_low:
+            ind = 4
+    return ind
 
 class JinjaTemplateEnv(object):
     """
@@ -191,6 +215,20 @@ class MSIDPlot(object):
         self.bin_size = bin_size
         self.limits = msid_limit.query_msid_limits(self.msids)
     
+    def _slice_step(self,n):
+        """
+        Provided a length of an array, determine the python slice step size necessary to
+        downsample an array to approximately the current bin_size.
+        If bin_size is specified as none, step size is one, meaning every available data point
+        """
+        if self.bin_size is not None:
+                _slice_step = n // self.bin_size
+                if _slice_step == 0:
+                    _slice_step = 1
+        else:
+            _slice_step = 1
+        return _slice_step
+
     def _query_maude(self, msids, **kwargs) -> dict:
 
         fetch_result = maude.get_msids(
@@ -221,8 +259,8 @@ class MSIDPlot(object):
                 use_switch = False
             else:
                 _switch_query = self._query_maude(msids=switch_msid)['data'][0]
-                _slice_step = _switch_query['n_values'] // self.bin_size
-                _switch_values = _switch_query['values'][::_slice_step]
+                slice_step = self._slice_step(_switch_query['n_values'])
+                _switch_values = _switch_query['values'][::slice_step]
                 _switch_values = _resize(_values, _switch_values)
 
         #: Iterate of all the limits matching target MSID in reverse time order.
@@ -232,8 +270,6 @@ class MSIDPlot(object):
                 _ref = None
                 for _limit in lim_selection[::-1]:
                     if _limit.datesec <= _cxo and _limit.switchstate == _switch.lower():
-                        print(_limit)
-                        print(_switch)
                         _ref = _limit
                         break
                 limit_match.append(_ref)
@@ -261,15 +297,9 @@ class MSIDPlot(object):
         limits_at_point = {}
         for result in self.fetch_result['data']:
             #: Downsample Step
-            if self.bin_size is not None:
-                _slice_step = result['n_values'] // self.bin_size
-                if _slice_step == 0:
-                    _slice_step = 1
-            else:
-                _slice_step = 1
-            
-            _values = result['values'][::_slice_step]
-            _cxotimes = result['times'][::_slice_step]
+            slice_step = self._slice_step(result['n_values'])
+            _values = result['values'][::slice_step]
+            _cxotimes = result['times'][::slice_step]
             limits_at_point[result['msid']] = self._match_limit(result['msid'], _values, _cxotimes, use_switch = True)
             values[result['msid']] = _values
             #: Fast numerical conversions to format cxosecs into Bokeh-plottable datetimes
@@ -292,7 +322,27 @@ class MSIDPlot(object):
 
         for msid in self.msids:
             p = figure(title="Test", y_axis_label=msid,x_axis_label="Date", x_axis_type = 'datetime')
-            p.scatter(x=self.datetimes[msid], y=self.values[msid])
+
+            #: Match the value to target limit class 
+            x_category = [[] for _ in range(5)]
+            y_category = [[] for _ in range(5)]
+            for x,y,lim in zip(self.datetimes[msid],
+                               self.values[msid],
+                               self.limits_at_point[msid]):
+                
+                ind = _ind(y,lim)
+                x_category[ind].append(x)
+                y_category[ind].append(y)
+
+            for i, (x,y) in enumerate(zip(x_category, y_category)):
+                if len(x) != 0:
+                    #: Found points in this violation category, therefore plot.
+                    p.scatter(x=x,
+                            y=y,
+                            legend_label=_VIOLATION_LABELS[i],
+                            color = _VIOALTION_COLORS[i]
+                            )
+            #p.scatter(x=self.datetimes[msid], y=self.values[msid])
 
             p.xaxis.formatter = DatetimeTickFormatter(
                 minutes="%Y:%j:%H:%M",
