@@ -178,7 +178,7 @@ class MSIDPlot(object):
     #: Type Hint
     fetch_result: dict[str, Any]
 
-    def __init__(self, msids, start, stop):
+    def __init__(self, msids, start, stop, bin_size = 500):
         if isinstance(msids, list):
             self.msids = [_.upper() for _ in msids]
         elif isinstance(msids, str):
@@ -188,6 +188,8 @@ class MSIDPlot(object):
 
         self.start = start
         self.stop = stop
+        self.bin_size = bin_size
+        self.limits = msid_limit.query_msid_limits(self.msids)
     
     def _query_maude(self, msids, **kwargs) -> dict:
 
@@ -196,7 +198,58 @@ class MSIDPlot(object):
         )
         return fetch_result
     
-    def fetch_data(self, bin_size = 500, forcerun = False) -> None:
+    def _match_limit(self, msid, _values, _cxotimes, use_switch = False):
+        """
+        Iterate through the fetched MSID limits, and determine appropriate limit reference.
+        If the use of the switch limit functionality is set to true (for smaller time spans),
+        then the limit selection criteria takes this into account and fetches from Maude.
+
+        Returns an array matching the correct limit reference for that MSID's data point.
+        """
+    
+        lim_selection = self.limits[msid]
+        if len(lim_selection) == 0:
+            limit_match = [None] * len(_values)
+            return limit_match
+        else:
+            limit_match = []
+
+        if use_switch:
+            #: Verify / fetch switch limit values.
+            switch_msid = lim_selection[-1].mlimsw
+            if switch_msid in (None, 'none'):
+                use_switch = False
+            else:
+                _switch_query = self._query_maude(msids=switch_msid)['data'][0]
+                _slice_step = _switch_query['n_values'] // self.bin_size
+                _switch_values = _switch_query['values'][::_slice_step]
+                _switch_values = _resize(_values, _switch_values)
+
+        #: Iterate of all the limits matching target MSID in reverse time order.
+        #: We more frequently want to find the most recent limits first.
+        if use_switch:
+            for _cxo, _switch in zip(_cxotimes, _switch_values):
+                _ref = None
+                for _limit in lim_selection[::-1]:
+                    if _limit.datesec <= _cxo and _limit.switchstate == _switch.lower():
+                        print(_limit)
+                        print(_switch)
+                        _ref = _limit
+                        break
+                limit_match.append(_ref)
+        else:
+            for _cxo in _cxotimes:
+                _ref = None
+                for _limit in lim_selection[::-1]:
+                    #: Pick default limit in database when not considering switch limits
+                    if _limit.datesec <= _cxo and _limit.default_set == _limit.setkey:
+                        _ref = _limit
+                        break
+                limit_match.append(_ref)
+        
+        return limit_match
+
+    def fetch_data(self, forcerun = False) -> None:
         """
         Fetch the MSID Plot telemetry from the maude server and assign the raw fetch result
         """
@@ -205,22 +258,26 @@ class MSIDPlot(object):
 
         values = {}
         datetimes = {}
+        limits_at_point = {}
         for result in self.fetch_result['data']:
             #: Downsample Step
-            if bin_size is not None:
-                _slice_step = result['n_values'] // bin_size
+            if self.bin_size is not None:
+                _slice_step = result['n_values'] // self.bin_size
                 if _slice_step == 0:
                     _slice_step = 1
             else:
                 _slice_step = 1
             
-            values[result['msid']] = result['values'][::_slice_step]
+            _values = result['values'][::_slice_step]
             _cxotimes = result['times'][::_slice_step]
+            limits_at_point[result['msid']] = self._match_limit(result['msid'], _values, _cxotimes, use_switch = True)
+            values[result['msid']] = _values
             #: Fast numerical conversions to format cxosecs into Bokeh-plottable datetimes
             datetimes[result['msid']] = _vecdatetime(ne.evaluate("_cxotimes + _T1998"))
         
         self.values = values
         self.datetimes = datetimes
+        self.limits_at_point = limits_at_point
 
     def fetch_limit(self) -> None:
         """
