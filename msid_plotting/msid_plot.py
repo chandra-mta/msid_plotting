@@ -28,12 +28,14 @@ from jinja2 import Environment, PackageLoader, FileSystemLoader, ChoiceLoader
 
 #: Plotting
 from bokeh.plotting import figure  #: 1.89usec
-from bokeh.layouts import gridplot  #: 1.83 usec
-from bokeh.models import DatetimeTickFormatter  #: 1.7 usec
+from bokeh.layouts import gridplot, column, layout  #: 1.83 usec
+from bokeh.models import DatetimeTickFormatter , CheckboxButtonGroup, CustomJS, BoxAnnotation #: 1.7 usec
 from bokeh.resources import CDN
 from bokeh.embed import file_html
 
 _T1998 = 883612736.816  #: Difference between Chandra and Epoch Time
+
+_LABELS = ["Yellow", "Red"]
 
 @np.vectorize
 def _vecdatetime(x):
@@ -234,7 +236,33 @@ class MSIDPlot(object):
                 days="%Y:%j",
             )
 
-            frames.append([p])
+            yel_box = BoxAnnotation(bottom=5e-4, fill_color = 'yellow', fill_alpha=0.3)
+            red_box = BoxAnnotation(top=-5e-4, fill_color = 'red', fill_alpha=0.3)
+
+            p.add_layout(yel_box)
+            p.add_layout(red_box)
+
+            btn = CheckboxButtonGroup(labels=_LABELS, active = [0,1])
+
+            callback = CustomJS(args=dict(yel_box=yel_box, red_box=red_box, btn=btn),
+                                code = """
+                                    if (btn.active.includes(0)) {
+                                        yel_box.visible = true;
+                                    } else {
+                                        yel_box.visible = false;
+                                    }
+                                    if (btn.active.includes(1)) {
+                                        red_box.visible = true;
+                                    } else {
+                                        red_box.visible = false;
+                                    }
+                                """
+                                )
+            btn.js_on_change('active', callback)
+
+            layout = column(btn, p)
+
+            frames.append([layout])
         return frames
         
     def generate_plot_html(self, template_name = None) -> str:
@@ -242,7 +270,8 @@ class MSIDPlot(object):
         Generate plot frames and write the contents into a python jinja template.
         """
         frames = self._generate_frames()
-        plot = gridplot(frames)
+        #plot = gridplot(frames)
+        plot = layout(frames)
         if template_name is None: 
             template = JINJA_TEMPLATE_ENV.env.get_template("plot.jinja")
         else:
