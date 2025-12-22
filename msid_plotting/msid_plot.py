@@ -326,6 +326,7 @@ class MSIDPlot(object):
             #: Match the value to target limit class 
             x_category = [[] for _ in range(5)]
             y_category = [[] for _ in range(5)]
+            size = len(self.values[msid])
             for x,y,lim in zip(self.datetimes[msid],
                                self.values[msid],
                                self.limits_at_point[msid]):
@@ -339,7 +340,7 @@ class MSIDPlot(object):
                     #: Found points in this violation category, therefore plot.
                     p.scatter(x=x,
                             y=y,
-                            legend_label=_VIOLATION_LABELS[i],
+                            legend_label=f"{_VIOLATION_LABELS[i]} ({100 * len(y)/size:.1f}%)",
                             color = _VIOALTION_COLORS[i]
                             )
             #p.scatter(x=self.datetimes[msid], y=self.values[msid])
