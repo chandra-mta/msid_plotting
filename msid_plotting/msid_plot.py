@@ -40,6 +40,16 @@ def _vecdatetime(x):
     if isinstance(x, (int, float)):
         return datetime.fromtimestamp(round(x))
 
+def _resize(alpha, beta):
+        if alpha.size < beta.size:
+            return beta[:alpha.size]
+        elif alpha.size > beta.size:
+            for i in range(beta.size, alpha.size):
+                beta = np.append(beta, beta[-1])
+            return beta
+        else:
+            return beta
+
 class JinjaTemplateEnv(object):
     """
     Singleton class for Jinja Enviroment tempaltes with additional template handling methods
