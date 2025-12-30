@@ -28,9 +28,9 @@ from jinja2 import Environment, PackageLoader, FileSystemLoader, ChoiceLoader
 
 #: Plotting
 from bokeh.plotting import figure  #: 1.89usec
-from bokeh.layouts import gridplot  #: 1.83 usec
+from bokeh.layouts import layout  #: 1.83 usec
 from bokeh.models import DatetimeTickFormatter  #: 1.7 usec
-from bokeh.palettes import Plasma5 #5.82 usec
+from bokeh.palettes import Plasma5 #: 5.82 usec
 from bokeh.resources import CDN
 from bokeh.embed import file_html
 
@@ -214,6 +214,17 @@ class MSIDPlot(object):
         self.stop = stop
         self.bin_size = bin_size
         self.limits = msid_limit.query_msid_limits(self.msids)
+        #: Figure attributes operate as keyword arguments for figures.
+        #: Defaults to common usage. Applied to each individual figure.
+        self.figure_attributes = {
+            'x_axis_label': "Time (UTC)",
+            'x_axis_type': "datetime",
+            }
+        #: Plot attributes operate as keyword arguments for full plot layout (containing multiple figures).
+        #: Defaults to common usage. Applied to first figure
+        self.top_plot_attributes = {
+            'title': " & ".join(self.msids)
+        }
     
     def _slice_step(self,n):
         """
@@ -321,7 +332,7 @@ class MSIDPlot(object):
         frames = []
 
         for msid in self.msids:
-            p = figure(title="Test", y_axis_label=msid,x_axis_label="Date", x_axis_type = 'datetime')
+            p = figure(y_axis_label=msid, **self.figure_attributes) # type: ignore
 
             #: Match the value to target limit class 
             x_category = [[] for _ in range(5)]
@@ -343,7 +354,6 @@ class MSIDPlot(object):
                             legend_label=f"{_VIOLATION_LABELS[i]} ({100 * len(y)/size:.1f}%)",
                             color = _VIOALTION_COLORS[i]
                             )
-            #p.scatter(x=self.datetimes[msid], y=self.values[msid])
 
             p.xaxis.formatter = DatetimeTickFormatter(
                 minutes="%Y:%j:%H:%M",
@@ -354,13 +364,25 @@ class MSIDPlot(object):
 
             frames.append([p])
         return frames
-        
+    
+    def _generate_layout(self, frames) -> Any:
+        """
+        Order plot frames into a specified layout.
+        """
+        top = frames[0]
+        if isinstance(top,list):
+            top = top[0]
+        for k,v in self.top_plot_attributes.items():
+            setattr(top,k,v)
+        plot = layout(frames)
+        return plot
+
     def generate_plot_html(self, template_name = None) -> str:
         """
         Generate plot frames and write the contents into a python jinja template.
         """
         frames = self._generate_frames()
-        plot = gridplot(frames)
+        plot = self._generate_layout(frames)
         if template_name is None: 
             template = JINJA_TEMPLATE_ENV.env.get_template("plot.jinja")
         else:
