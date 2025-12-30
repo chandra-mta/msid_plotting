@@ -214,6 +214,7 @@ class MSIDPlot(object):
         self.stop = stop
         self.bin_size = bin_size
         self.limits = msid_limit.query_msid_limits(self.msids)
+        self.y_axis_labels = {_m:_m for _m in self.msids}
         #: Figure attributes operate as keyword arguments for figures.
         #: Defaults to common usage. Applied to each individual figure.
         self.figure_attributes = {
@@ -332,7 +333,7 @@ class MSIDPlot(object):
         frames = []
 
         for msid in self.msids:
-            p = figure(y_axis_label=msid, **self.figure_attributes) # type: ignore
+            p = figure(y_axis_label=self.y_axis_labels[msid], **self.figure_attributes) # type: ignore
 
             #: Match the value to target limit class 
             x_category = [[] for _ in range(5)]
