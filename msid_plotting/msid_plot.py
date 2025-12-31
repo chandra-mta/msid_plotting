@@ -40,6 +40,15 @@ _VIOLATION_COLORS = [Plasma5[0], Plasma5[4], Plasma5[3], Plasma5[2], Plasma5[1]]
 
 _TOP_PLOT_ATTRIBUTES = ('title')
 
+_DATETIME_TICK_FORMAT = {
+    'minutes': "%H:%M",
+    'hourmin': "%H:%M",
+    'hours': "%j:%H",
+    'days': "%Y:%j",
+    'months': "%Y:%b",
+    'years': "%Y"
+}
+
 @np.vectorize
 def _vecdatetime(x):
     if isinstance(x, (int, float)):
@@ -383,12 +392,7 @@ class MSIDPlot(object):
                             color = _VIOLATION_COLORS[i]
                             )
 
-            p.xaxis.formatter = DatetimeTickFormatter(
-                minutes="%Y:%j:%H:%M",
-                hours="%Y:%j:%H",
-                hourmin="%Y:%j:%H:%M",
-                days="%Y:%j",
-            )
+            p.xaxis.formatter = DatetimeTickFormatter(**_DATETIME_TICK_FORMAT) # type: ignore
 
             frames.append([p])
         return frames
