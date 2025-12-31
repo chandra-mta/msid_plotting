@@ -36,7 +36,9 @@ from bokeh.embed import file_html
 
 _T1998 = 883612736.816  #: Difference between Chandra and Epoch Time
 _VIOLATION_LABELS = ['Normal', 'High Yellow', 'Low Yellow', 'High Red', 'Low Red']
-_VIOALTION_COLORS = [Plasma5[0], Plasma5[4], Plasma5[3], Plasma5[2], Plasma5[1]]
+_VIOLATION_COLORS = [Plasma5[0], Plasma5[4], Plasma5[3], Plasma5[2], Plasma5[1]]
+
+_TOP_PLOT_ATTRIBUTES = ('title')
 
 @np.vectorize
 def _vecdatetime(x):
@@ -227,6 +229,26 @@ class MSIDPlot(object):
             'title': " & ".join(self.msids)
         }
     
+    def annotate(self, annotation: dict):
+        """
+        Assign annotations to their correct class attribute. Annotations are keyed by their
+        the equivalent kwarg used in Python Bokeh plots. Note that by editing the MSIDPlot attributes directly,
+        desired annotations breaking this package's conventions can still be applied.
+        """
+        for k, v in annotation.items():
+            if k == 'y_axis_labels':
+                if isinstance(v, list):
+                    self.y_axis_labels = {
+                        _msid: _label for _msid, _label in zip(self.msids, v)
+                        }
+                else:
+                    self.y_axis_labels = v
+            elif k in _TOP_PLOT_ATTRIBUTES:
+                self.top_plot_attributes[k] = v
+            else:
+                self.figure_attributes[k] = v
+
+
     def _slice_step(self,n):
         """
         Provided a length of an array, determine the python slice step size necessary to
@@ -353,7 +375,7 @@ class MSIDPlot(object):
                     p.scatter(x=x,
                             y=y,
                             legend_label=f"{_VIOLATION_LABELS[i]} ({100 * len(y)/size:.1f}%)",
-                            color = _VIOALTION_COLORS[i]
+                            color = _VIOLATION_COLORS[i]
                             )
 
             p.xaxis.formatter = DatetimeTickFormatter(
