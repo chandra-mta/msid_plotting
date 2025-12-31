@@ -383,9 +383,13 @@ class MSIDPlot(object):
 
     def _generate_frames(self) -> List[Any]:
         frames = []
-
+        x_range = None
         for msid in self.msids:
-            p = figure(y_axis_label=self.y_axis_labels[msid], **self.figure_attributes) # type: ignore
+            if x_range is None:
+                p = figure(y_axis_label=self.y_axis_labels[msid], **self.figure_attributes) # type: ignore
+                x_range = p.x_range
+            else:
+                p = figure(y_axis_label=self.y_axis_labels[msid], x_range = x_range, **self.figure_attributes) # type: ignore
             _weight = self.weights.get(msid) or 1
             #: Match the value to target limit class 
             x_category = [[] for _ in range(5)]
