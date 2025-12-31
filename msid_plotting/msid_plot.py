@@ -227,6 +227,7 @@ class MSIDPlot(object):
         self.limits = msid_limit.query_msid_limits(self.msids)
         #: Use switch limits if the plotted timespan is under a week
         self.use_switch_limits = (self.stop - self.start).to_value('s') < 604800
+        self.weights = {}
         self.y_axis_labels = {_m:_m for _m in self.msids}
         #: Figure attributes operate as keyword arguments for figures.
         #: Defaults to common usage. Applied to each individual figure.
@@ -256,6 +257,17 @@ class MSIDPlot(object):
                     self.y_axis_labels = v
             elif k == 'use_switch_limits':
                 self.use_switch_limits = bool(v)
+            elif k == 'weights':
+                if isinstance(v,list):
+                    self.weights = {
+                        _msid: _weight for _msid, _weight in zip(self.msids, v)
+                    }
+                elif isinstance(v, (int,float)):
+                    self.weights = {
+                        _msid: v for _msid in self.msids
+                    }
+                else:
+                    self.weights = v
             elif k in _TOP_PLOT_ATTRIBUTES:
                 self.top_plot_attributes[k] = v
             else:
@@ -370,7 +382,7 @@ class MSIDPlot(object):
 
         for msid in self.msids:
             p = figure(y_axis_label=self.y_axis_labels[msid], **self.figure_attributes) # type: ignore
-
+            _weight = self.weights.get(msid) or 1
             #: Match the value to target limit class 
             x_category = [[] for _ in range(5)]
             y_category = [[] for _ in range(5)]
@@ -386,11 +398,18 @@ class MSIDPlot(object):
             for i, (x,y) in enumerate(zip(x_category, y_category)):
                 if len(x) != 0:
                     #: Found points in this violation category, therefore plot.
-                    p.scatter(x=x,
-                            y=y,
-                            legend_label=f"{_VIOLATION_LABELS[i]} ({100 * len(y)/size:.1f}%)",
-                            color = _VIOLATION_COLORS[i]
-                            )
+                    if _weight == 1:
+                        p.scatter(x=x,
+                                y=y,
+                                legend_label=f"{_VIOLATION_LABELS[i]} ({100 * len(y)/size:.1f}%)",
+                                color = _VIOLATION_COLORS[i]
+                                )
+                    else:
+                        p.scatter(x=x,
+                                y=[ v * _weight for v in y ],
+                                legend_label=f"{_VIOLATION_LABELS[i]} ({100 * len(y)/size:.1f}%)",
+                                color = _VIOLATION_COLORS[i]
+                                )
 
             p.xaxis.formatter = DatetimeTickFormatter(**_DATETIME_TICK_FORMAT) # type: ignore
 
