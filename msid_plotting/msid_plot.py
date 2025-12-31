@@ -279,6 +279,10 @@ class MSIDPlot(object):
         Provided a length of an array, determine the python slice step size necessary to
         downsample an array to approximately the current bin_size.
         If bin_size is specified as none, step size is one, meaning every available data point
+
+        :NOTE: Sometimes certain periodic MSID's change so frequently that downsampling the plotted values
+            can lose those visual features and plot abnormal patterns for a given MSID value. This limitation is intrinsic
+            to plotting a frequently changing MSID over a long timespan and is best handled with a shorter timespan.
         """
         if self.bin_size is not None:
                 _slice_step = n // self.bin_size
