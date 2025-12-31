@@ -216,6 +216,8 @@ class MSIDPlot(object):
         self.stop = stop
         self.bin_size = bin_size
         self.limits = msid_limit.query_msid_limits(self.msids)
+        #: Use switch limits if the plotted timespan is under a week
+        self.use_switch_limits = (self.stop - self.start).to_value('s') < 604800
         self.y_axis_labels = {_m:_m for _m in self.msids}
         #: Figure attributes operate as keyword arguments for figures.
         #: Defaults to common usage. Applied to each individual figure.
@@ -243,6 +245,8 @@ class MSIDPlot(object):
                         }
                 else:
                     self.y_axis_labels = v
+            elif k == 'use_switch_limits':
+                self.use_switch_limits = bool(v)
             elif k in _TOP_PLOT_ATTRIBUTES:
                 self.top_plot_attributes[k] = v
             else:
@@ -270,7 +274,7 @@ class MSIDPlot(object):
         )
         return fetch_result
     
-    def _match_limit(self, msid, _values, _cxotimes, use_switch = False):
+    def _match_limit(self, msid, _values, _cxotimes, use_switch = None):
         """
         Iterate through the fetched MSID limits, and determine appropriate limit reference.
         If the use of the switch limit functionality is set to true (for smaller time spans),
@@ -278,7 +282,8 @@ class MSIDPlot(object):
 
         Returns an array matching the correct limit reference for that MSID's data point.
         """
-    
+        if use_switch is None:
+            use_switch = self.use_switch_limits
         lim_selection = self.limits[msid]
         if len(lim_selection) == 0:
             limit_match = [None] * len(_values)
@@ -334,7 +339,7 @@ class MSIDPlot(object):
             slice_step = self._slice_step(result['n_values'])
             _values = result['values'][::slice_step]
             _cxotimes = result['times'][::slice_step]
-            limits_at_point[result['msid']] = self._match_limit(result['msid'], _values, _cxotimes, use_switch = True)
+            limits_at_point[result['msid']] = self._match_limit(result['msid'], _values, _cxotimes)
             values[result['msid']] = _values
             #: Fast numerical conversions to format cxosecs into Bokeh-plottable datetimes
             datetimes[result['msid']] = _vecdatetime(ne.evaluate("_cxotimes + _T1998"))
