@@ -229,13 +229,13 @@ class MSIDPlot(object):
             'title': " & ".join(self.msids)
         }
     
-    def annotate(self, annotation: dict):
+    def parameterize(self, parameters: dict):
         """
-        Assign annotations to their correct class attribute. Annotations are keyed by their
+        Assign parameters to their correct class attribute. Parameters are keyed by their
         the equivalent kwarg used in Python Bokeh plots. Note that by editing the MSIDPlot attributes directly,
-        desired annotations breaking this package's conventions can still be applied.
+        desired parameters breaking this package's conventions can still be applied.
         """
-        for k, v in annotation.items():
+        for k, v in parameters.items():
             if k == 'y_axis_labels':
                 if isinstance(v, list):
                     self.y_axis_labels = {
