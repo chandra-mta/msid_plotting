@@ -28,15 +28,26 @@ from jinja2 import Environment, PackageLoader, FileSystemLoader, ChoiceLoader
 
 #: Plotting
 from bokeh.plotting import figure  #: 1.89usec
-from bokeh.layouts import gridplot  #: 1.83 usec
+from bokeh.layouts import layout  #: 1.83 usec
 from bokeh.models import DatetimeTickFormatter  #: 1.7 usec
-from bokeh.palettes import Plasma5 #5.82 usec
+from bokeh.palettes import Plasma5 #: 5.82 usec
 from bokeh.resources import CDN
 from bokeh.embed import file_html
 
 _T1998 = 883612736.816  #: Difference between Chandra and Epoch Time
 _VIOLATION_LABELS = ['Normal', 'High Yellow', 'Low Yellow', 'High Red', 'Low Red']
-_VIOALTION_COLORS = [Plasma5[0], Plasma5[4], Plasma5[3], Plasma5[2], Plasma5[1]]
+_VIOLATION_COLORS = [Plasma5[0], Plasma5[4], Plasma5[3], Plasma5[2], Plasma5[1]]
+
+_TOP_PLOT_ATTRIBUTES = ('title')
+
+_DATETIME_TICK_FORMAT = {
+    'minutes': "%H:%M",
+    'hourmin': "%H:%M",
+    'hours': "%j:%H",
+    'days': "%Y:%j",
+    'months': "%Y:%b",
+    'years': "%Y"
+}
 
 @np.vectorize
 def _vecdatetime(x):
@@ -214,12 +225,64 @@ class MSIDPlot(object):
         self.stop = stop
         self.bin_size = bin_size
         self.limits = msid_limit.query_msid_limits(self.msids)
+        #: Use switch limits if the plotted timespan is under a week
+        self.use_switch_limits = (self.stop - self.start).to_value('s') < 604800
+        self.weights = {}
+        self.y_axis_labels = {_m:_m for _m in self.msids}
+        #: Figure attributes operate as keyword arguments for figures.
+        #: Defaults to common usage. Applied to each individual figure.
+        self.figure_attributes = {
+            'x_axis_label': "Time (UTC)",
+            'x_axis_type': "datetime",
+            }
+        #: Plot attributes operate as keyword arguments for full plot layout (containing multiple figures).
+        #: Defaults to common usage. Applied to first figure
+        self.top_plot_attributes = {
+            'title': " & ".join(self.msids)
+        }
     
+    def parameterize(self, parameters: dict):
+        """
+        Assign parameters to their correct class attribute. Parameters are keyed by their
+        the equivalent kwarg used in Python Bokeh plots. Note that by editing the MSIDPlot attributes directly,
+        desired parameters breaking this package's conventions can still be applied.
+        """
+        for k, v in parameters.items():
+            if k == 'y_axis_labels':
+                if isinstance(v, list):
+                    self.y_axis_labels = {
+                        _msid: _label for _msid, _label in zip(self.msids, v)
+                        }
+                else:
+                    self.y_axis_labels = v
+            elif k == 'use_switch_limits':
+                self.use_switch_limits = bool(v)
+            elif k == 'weights':
+                if isinstance(v,list):
+                    self.weights = {
+                        _msid: _weight for _msid, _weight in zip(self.msids, v)
+                    }
+                elif isinstance(v, (int,float)):
+                    self.weights = {
+                        _msid: v for _msid in self.msids
+                    }
+                else:
+                    self.weights = v
+            elif k in _TOP_PLOT_ATTRIBUTES:
+                self.top_plot_attributes[k] = v
+            else:
+                self.figure_attributes[k] = v
+
+
     def _slice_step(self,n):
         """
         Provided a length of an array, determine the python slice step size necessary to
         downsample an array to approximately the current bin_size.
         If bin_size is specified as none, step size is one, meaning every available data point
+
+        :NOTE: Sometimes certain periodic MSID's change so frequently that downsampling the plotted values
+            can lose those visual features and plot abnormal patterns for a given MSID value. This limitation is intrinsic
+            to plotting a frequently changing MSID over a long timespan and is best handled with a shorter timespan.
         """
         if self.bin_size is not None:
                 _slice_step = n // self.bin_size
@@ -236,7 +299,7 @@ class MSIDPlot(object):
         )
         return fetch_result
     
-    def _match_limit(self, msid, _values, _cxotimes, use_switch = False):
+    def _match_limit(self, msid, _values, _cxotimes, use_switch = None):
         """
         Iterate through the fetched MSID limits, and determine appropriate limit reference.
         If the use of the switch limit functionality is set to true (for smaller time spans),
@@ -244,7 +307,8 @@ class MSIDPlot(object):
 
         Returns an array matching the correct limit reference for that MSID's data point.
         """
-    
+        if use_switch is None:
+            use_switch = self.use_switch_limits
         lim_selection = self.limits[msid]
         if len(lim_selection) == 0:
             limit_match = [None] * len(_values)
@@ -300,7 +364,7 @@ class MSIDPlot(object):
             slice_step = self._slice_step(result['n_values'])
             _values = result['values'][::slice_step]
             _cxotimes = result['times'][::slice_step]
-            limits_at_point[result['msid']] = self._match_limit(result['msid'], _values, _cxotimes, use_switch = True)
+            limits_at_point[result['msid']] = self._match_limit(result['msid'], _values, _cxotimes)
             values[result['msid']] = _values
             #: Fast numerical conversions to format cxosecs into Bokeh-plottable datetimes
             datetimes[result['msid']] = _vecdatetime(ne.evaluate("_cxotimes + _T1998"))
@@ -319,10 +383,14 @@ class MSIDPlot(object):
 
     def _generate_frames(self) -> List[Any]:
         frames = []
-
+        x_range = None
         for msid in self.msids:
-            p = figure(title="Test", y_axis_label=msid,x_axis_label="Date", x_axis_type = 'datetime')
-
+            if x_range is None:
+                p = figure(y_axis_label=self.y_axis_labels[msid], **self.figure_attributes) # type: ignore
+                x_range = p.x_range
+            else:
+                p = figure(y_axis_label=self.y_axis_labels[msid], x_range = x_range, **self.figure_attributes) # type: ignore
+            _weight = self.weights.get(msid) or 1
             #: Match the value to target limit class 
             x_category = [[] for _ in range(5)]
             y_category = [[] for _ in range(5)]
@@ -338,29 +406,42 @@ class MSIDPlot(object):
             for i, (x,y) in enumerate(zip(x_category, y_category)):
                 if len(x) != 0:
                     #: Found points in this violation category, therefore plot.
-                    p.scatter(x=x,
-                            y=y,
-                            legend_label=f"{_VIOLATION_LABELS[i]} ({100 * len(y)/size:.1f}%)",
-                            color = _VIOALTION_COLORS[i]
-                            )
-            #p.scatter(x=self.datetimes[msid], y=self.values[msid])
+                    if _weight == 1:
+                        p.scatter(x=x,
+                                y=y,
+                                legend_label=f"{_VIOLATION_LABELS[i]} ({100 * len(y)/size:.1f}%)",
+                                color = _VIOLATION_COLORS[i]
+                                )
+                    else:
+                        p.scatter(x=x,
+                                y=[ v * _weight for v in y ],
+                                legend_label=f"{_VIOLATION_LABELS[i]} ({100 * len(y)/size:.1f}%)",
+                                color = _VIOLATION_COLORS[i]
+                                )
 
-            p.xaxis.formatter = DatetimeTickFormatter(
-                minutes="%Y:%j:%H:%M",
-                hours="%Y:%j:%H",
-                hourmin="%Y:%j:%H:%M",
-                days="%Y:%j",
-            )
+            p.xaxis.formatter = DatetimeTickFormatter(**_DATETIME_TICK_FORMAT) # type: ignore
 
             frames.append([p])
         return frames
-        
+    
+    def _generate_layout(self, frames) -> Any:
+        """
+        Order plot frames into a specified layout.
+        """
+        top = frames[0]
+        if isinstance(top,list):
+            top = top[0]
+        for k,v in self.top_plot_attributes.items():
+            setattr(top,k,v)
+        plot = layout(frames)
+        return plot
+
     def generate_plot_html(self, template_name = None) -> str:
         """
         Generate plot frames and write the contents into a python jinja template.
         """
         frames = self._generate_frames()
-        plot = gridplot(frames)
+        plot = self._generate_layout(frames)
         if template_name is None: 
             template = JINJA_TEMPLATE_ENV.env.get_template("plot.jinja")
         else:
