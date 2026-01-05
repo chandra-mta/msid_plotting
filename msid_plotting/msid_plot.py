@@ -28,8 +28,8 @@ from jinja2 import Environment, PackageLoader, FileSystemLoader, ChoiceLoader
 
 #: Plotting
 from bokeh.plotting import figure  #: 1.89usec
-from bokeh.layouts import layout  #: 1.83 usec
-from bokeh.models import DatetimeTickFormatter  #: 1.7 usec
+from bokeh.layouts import gridplot  #: 1.83 usec
+from bokeh.models import DatetimeTickFormatter, HoverTool  #: 1.7 usec
 from bokeh.palettes import Plasma5 #: 5.82 usec
 from bokeh.resources import CDN
 from bokeh.embed import file_html
@@ -39,6 +39,7 @@ _VIOLATION_LABELS = ['Normal', 'High Yellow', 'Low Yellow', 'High Red', 'Low Red
 _VIOLATION_COLORS = [Plasma5[0], Plasma5[4], Plasma5[3], Plasma5[2], Plasma5[1]]
 
 _TOP_PLOT_ATTRIBUTES = ('title')
+_GLYPH_ATTRIBUTES = ('size', 'marker')
 
 _DATETIME_TICK_FORMAT = {
     'minutes': "%H:%M",
@@ -240,6 +241,9 @@ class MSIDPlot(object):
         self.top_plot_attributes = {
             'title': " & ".join(self.msids)
         }
+        #: Glyph attributes operate as keyword arguments for plotting marks inside a figure.
+        #: Defaults to common usage. Applied to each plot inside a figure
+        self.glyph_attributes = {}
     
     def parameterize(self, parameters: dict):
         """
@@ -270,6 +274,8 @@ class MSIDPlot(object):
                     self.weights = v
             elif k in _TOP_PLOT_ATTRIBUTES:
                 self.top_plot_attributes[k] = v
+            elif k in _GLYPH_ATTRIBUTES or k.split('_')[0] in ('line', 'fill'):
+                self.glyph_attributes[k] = v
             else:
                 self.figure_attributes[k] = v
 
@@ -410,38 +416,50 @@ class MSIDPlot(object):
                         p.scatter(x=x,
                                 y=y,
                                 legend_label=f"{_VIOLATION_LABELS[i]} ({100 * len(y)/size:.1f}%)",
-                                color = _VIOLATION_COLORS[i]
+                                color = _VIOLATION_COLORS[i],
+                                **self.glyph_attributes
                                 )
                     else:
                         p.scatter(x=x,
                                 y=[ v * _weight for v in y ],
                                 legend_label=f"{_VIOLATION_LABELS[i]} ({100 * len(y)/size:.1f}%)",
-                                color = _VIOLATION_COLORS[i]
+                                color = _VIOLATION_COLORS[i],
+                                **self.glyph_attributes
                                 )
 
             p.xaxis.formatter = DatetimeTickFormatter(**_DATETIME_TICK_FORMAT) # type: ignore
 
-            frames.append([p])
+            hover_tool = HoverTool(
+                tooltips = [
+                    ('Value', "$y{0.2f}"),
+                    ('Time', "$x{%Y-%m-%d %H:%M:%S}")
+                ],
+                formatters = {"$x": "datetime"},
+                description = "Toggle point value tooltip."
+            )
+            p.add_tools(hover_tool)
+
+            frames.append(p)
         return frames
     
-    def _generate_layout(self, frames) -> Any:
+    def _generate_layout(self, frames, ncols = None) -> Any:
         """
-        Order plot frames into a specified layout.
+        Order plot frames into a specified grid.
         """
         top = frames[0]
         if isinstance(top,list):
             top = top[0]
         for k,v in self.top_plot_attributes.items():
             setattr(top,k,v)
-        plot = layout(frames)
+        plot = gridplot(children = frames, ncols = ncols)
         return plot
 
-    def generate_plot_html(self, template_name = None, template_variables = {}) -> str:
+    def generate_plot_html(self, template_name = None, template_variables = {}, ncols = None) -> str:
         """
         Generate plot frames and write the contents into a python jinja template.
         """
         frames = self._generate_frames()
-        plot = self._generate_layout(frames)
+        plot = self._generate_layout(frames, ncols=ncols)
         if template_name is None: 
             template = JINJA_TEMPLATE_ENV.env.get_template("plot.jinja")
         else:
