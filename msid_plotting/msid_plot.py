@@ -436,7 +436,7 @@ class MSIDPlot(object):
         plot = layout(frames)
         return plot
 
-    def generate_plot_html(self, template_name = None) -> str:
+    def generate_plot_html(self, template_name = None, template_variables = {}) -> str:
         """
         Generate plot frames and write the contents into a python jinja template.
         """
@@ -447,6 +447,10 @@ class MSIDPlot(object):
         else:
             template = JINJA_TEMPLATE_ENV.env.get_template(template_name)
 
-        html = file_html(plot, CDN, template=template)
+        if 'title' in template_variables.keys():
+            title = template_variables.pop('title')
+            html = file_html(plot, CDN, template=template, title=title, template_variables=template_variables)
+        else:
+            html = file_html(plot, CDN, template=template, template_variables=template_variables)
 
         return html
