@@ -28,7 +28,7 @@ from jinja2 import Environment, PackageLoader, FileSystemLoader, ChoiceLoader
 
 #: Plotting
 from bokeh.plotting import figure  #: 1.89usec
-from bokeh.layouts import layout  #: 1.83 usec
+from bokeh.layouts import gridplot  #: 1.83 usec
 from bokeh.models import DatetimeTickFormatter, HoverTool  #: 1.7 usec
 from bokeh.palettes import Plasma5 #: 5.82 usec
 from bokeh.resources import CDN
@@ -439,27 +439,27 @@ class MSIDPlot(object):
             )
             p.add_tools(hover_tool)
 
-            frames.append([p])
+            frames.append(p)
         return frames
     
-    def _generate_layout(self, frames) -> Any:
+    def _generate_layout(self, frames, ncols = None) -> Any:
         """
-        Order plot frames into a specified layout.
+        Order plot frames into a specified grid.
         """
         top = frames[0]
         if isinstance(top,list):
             top = top[0]
         for k,v in self.top_plot_attributes.items():
             setattr(top,k,v)
-        plot = layout(frames)
+        plot = gridplot(children = frames, ncols = ncols)
         return plot
 
-    def generate_plot_html(self, template_name = None, template_variables = {}) -> str:
+    def generate_plot_html(self, template_name = None, template_variables = {}, ncols = None) -> str:
         """
         Generate plot frames and write the contents into a python jinja template.
         """
         frames = self._generate_frames()
-        plot = self._generate_layout(frames)
+        plot = self._generate_layout(frames, ncols=ncols)
         if template_name is None: 
             template = JINJA_TEMPLATE_ENV.env.get_template("plot.jinja")
         else:
