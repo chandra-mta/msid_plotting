@@ -11,19 +11,16 @@ Plotting classes for multivariate MSID plots using bokeh for interactivity.
 from . import msid_limit
 
 #: Ska3
-import kadi.events
-from cxotime import CxoTime
 import maude
 
 #: Calculation
-from datetime import datetime, timedelta, time
+from datetime import datetime
 import numexpr as ne
 import numpy as np
 import os
 
 #: Formatting
-from typing import Any, cast, List
-from pprint import pformat
+from typing import Any, List
 from jinja2 import Environment, PackageLoader, FileSystemLoader, ChoiceLoader
 
 #: Plotting
@@ -124,85 +121,6 @@ class JinjaTemplateEnv(object):
                 raise FileNotFoundError(f"Could not find filepath: {filepath}")
 
 JINJA_TEMPLATE_ENV = JinjaTemplateEnv()
-
-class CommCheck(object):
-    """
-    Singleton class for kadi-fetched comm information and related methods.
-
-    Only used to check if currently in comm
-    """
-
-    _instance = None
-
-    def __new__(cls, *args, **kwargs):
-        if cls._instance is None:
-            #: If no CommCheck instance exists, create a new one
-            cls._instance = super().__new__(cls)
-        return cls._instance  #: Return the existing instance
-
-    def __init__(self):
-        if not hasattr(self, "_initialized"):  #: Prevent re-initialization
-            self._initialized = True
-            self.check()
-
-    def check(self):
-        """
-        Sets the in-comm check information. Runs once at initialization then can be run again at will
-        """
-        self.current_time = CxoTime()
-        self.dsn_query = kadi.events.dsn_comms.filter(start=self.current_time)
-        self.in_support = False
-        self.in_track = False
-        self.comm = self.dsn_query[0]
-        #: Identify Track Time (Data exchange during track during)
-        _start = cast(CxoTime, CxoTime(self.comm.start))
-        _stop = cast(CxoTime, CxoTime(self.comm.stop))
-
-        #: Start
-        _dt_start = cast(datetime, _start.datetime)
-        _track_start = CxoTime(
-            datetime.combine(
-                _dt_start.date(),
-                time(hour=int(self.comm.bot[:2]), minute=int(self.comm.bot[2:])),
-            )
-        )
-
-        if _track_start < _start:  #: Time after midnight
-            _track_start += timedelta(days=1)
-
-        #: Stop
-        _dt_stop = cast(datetime, _stop.datetime)
-        _track_stop = CxoTime(
-            datetime.combine(
-                _dt_stop.date(),
-                time(hour=int(self.comm.eot[:2]), minute=int(self.comm.eot[2:])),
-            )
-        )
-
-        if _track_stop > _stop:  #: Time before midnight
-            _track_stop -= timedelta(days=1)
-
-        self.support_start = _start
-        self.support_stop = _stop
-        self.track_start = _track_start
-        self.track_stop = _track_stop
-
-        if _start < self.current_time < _stop:
-            self.in_support = True
-        if _track_start < self.current_time < _track_stop:
-            self.in_track = True
-
-    def __repr__(self):
-        return " ".join(
-            [
-                f"<{self.__class__.__name__}:",
-                f"time={self.current_time.date},",
-                f"track_start={self.track_start.date}>",
-            ]
-        )
-
-    def __str__(self):
-        return pformat(self.__dict__)
 
 class MSIDPlot(object):
     """
