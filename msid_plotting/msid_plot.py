@@ -11,25 +11,22 @@ Plotting classes for multivariate MSID plots using bokeh for interactivity.
 from . import msid_limit
 
 #: Ska3
-import kadi.events
-from cxotime import CxoTime
 import maude
 
 #: Calculation
-from datetime import datetime, timedelta, time
+from datetime import datetime
 import numexpr as ne
 import numpy as np
 import os
 
 #: Formatting
-from typing import Any, cast, List
-from pprint import pformat
+from typing import Any, List
 from jinja2 import Environment, PackageLoader, FileSystemLoader, ChoiceLoader
 
 #: Plotting
 from bokeh.plotting import figure  #: 1.89usec
-from bokeh.layouts import layout  #: 1.83 usec
-from bokeh.models import DatetimeTickFormatter  #: 1.7 usec
+from bokeh.layouts import gridplot  #: 1.83 usec
+from bokeh.models import DatetimeTickFormatter, HoverTool  #: 1.7 usec
 from bokeh.palettes import Plasma5 #: 5.82 usec
 from bokeh.resources import CDN
 from bokeh.embed import file_html
@@ -39,6 +36,7 @@ _VIOLATION_LABELS = ['Normal', 'High Yellow', 'Low Yellow', 'High Red', 'Low Red
 _VIOLATION_COLORS = [Plasma5[0], Plasma5[4], Plasma5[3], Plasma5[2], Plasma5[1]]
 
 _TOP_PLOT_ATTRIBUTES = ('title')
+_GLYPH_ATTRIBUTES = ('size', 'marker')
 
 _DATETIME_TICK_FORMAT = {
     'minutes': "%H:%M",
@@ -124,85 +122,6 @@ class JinjaTemplateEnv(object):
 
 JINJA_TEMPLATE_ENV = JinjaTemplateEnv()
 
-class CommCheck(object):
-    """
-    Singleton class for kadi-fetched comm information and related methods.
-
-    Only used to check if currently in comm
-    """
-
-    _instance = None
-
-    def __new__(cls, *args, **kwargs):
-        if cls._instance is None:
-            #: If no CommCheck instance exists, create a new one
-            cls._instance = super().__new__(cls)
-        return cls._instance  #: Return the existing instance
-
-    def __init__(self):
-        if not hasattr(self, "_initialized"):  #: Prevent re-initialization
-            self._initialized = True
-            self.check()
-
-    def check(self):
-        """
-        Sets the in-comm check information. Runs once at initialization then can be run again at will
-        """
-        self.current_time = CxoTime()
-        self.dsn_query = kadi.events.dsn_comms.filter(start=self.current_time)
-        self.in_support = False
-        self.in_track = False
-        self.comm = self.dsn_query[0]
-        #: Identify Track Time (Data exchange during track during)
-        _start = cast(CxoTime, CxoTime(self.comm.start))
-        _stop = cast(CxoTime, CxoTime(self.comm.stop))
-
-        #: Start
-        _dt_start = cast(datetime, _start.datetime)
-        _track_start = CxoTime(
-            datetime.combine(
-                _dt_start.date(),
-                time(hour=int(self.comm.bot[:2]), minute=int(self.comm.bot[2:])),
-            )
-        )
-
-        if _track_start < _start:  #: Time after midnight
-            _track_start += timedelta(days=1)
-
-        #: Stop
-        _dt_stop = cast(datetime, _stop.datetime)
-        _track_stop = CxoTime(
-            datetime.combine(
-                _dt_stop.date(),
-                time(hour=int(self.comm.eot[:2]), minute=int(self.comm.eot[2:])),
-            )
-        )
-
-        if _track_stop > _stop:  #: Time before midnight
-            _track_stop -= timedelta(days=1)
-
-        self.support_start = _start
-        self.support_stop = _stop
-        self.track_start = _track_start
-        self.track_stop = _track_stop
-
-        if _start < self.current_time < _stop:
-            self.in_support = True
-        if _track_start < self.current_time < _track_stop:
-            self.in_track = True
-
-    def __repr__(self):
-        return " ".join(
-            [
-                f"<{self.__class__.__name__}:",
-                f"time={self.current_time.date},",
-                f"track_start={self.track_start.date}>",
-            ]
-        )
-
-    def __str__(self):
-        return pformat(self.__dict__)
-
 class MSIDPlot(object):
     """
     Class for plotting parameters of Multivariate MSID interactive plot
@@ -240,6 +159,9 @@ class MSIDPlot(object):
         self.top_plot_attributes = {
             'title': " & ".join(self.msids)
         }
+        #: Glyph attributes operate as keyword arguments for plotting marks inside a figure.
+        #: Defaults to common usage. Applied to each plot inside a figure
+        self.glyph_attributes = {}
     
     def parameterize(self, parameters: dict):
         """
@@ -270,6 +192,8 @@ class MSIDPlot(object):
                     self.weights = v
             elif k in _TOP_PLOT_ATTRIBUTES:
                 self.top_plot_attributes[k] = v
+            elif k in _GLYPH_ATTRIBUTES or k.split('_')[0] in ('line', 'fill'):
+                self.glyph_attributes[k] = v
             else:
                 self.figure_attributes[k] = v
 
@@ -410,43 +334,59 @@ class MSIDPlot(object):
                         p.scatter(x=x,
                                 y=y,
                                 legend_label=f"{_VIOLATION_LABELS[i]} ({100 * len(y)/size:.1f}%)",
-                                color = _VIOLATION_COLORS[i]
+                                color = _VIOLATION_COLORS[i],
+                                **self.glyph_attributes
                                 )
                     else:
                         p.scatter(x=x,
                                 y=[ v * _weight for v in y ],
                                 legend_label=f"{_VIOLATION_LABELS[i]} ({100 * len(y)/size:.1f}%)",
-                                color = _VIOLATION_COLORS[i]
+                                color = _VIOLATION_COLORS[i],
+                                **self.glyph_attributes
                                 )
 
             p.xaxis.formatter = DatetimeTickFormatter(**_DATETIME_TICK_FORMAT) # type: ignore
 
-            frames.append([p])
+            hover_tool = HoverTool(
+                tooltips = [
+                    ('Value', "$y{0.2f}"),
+                    ('Time', "$x{%Y-%m-%d %H:%M:%S}")
+                ],
+                formatters = {"$x": "datetime"},
+                description = "Toggle point value tooltip."
+            )
+            p.add_tools(hover_tool)
+
+            frames.append(p)
         return frames
     
-    def _generate_layout(self, frames) -> Any:
+    def _generate_layout(self, frames, ncols = None) -> Any:
         """
-        Order plot frames into a specified layout.
+        Order plot frames into a specified grid.
         """
         top = frames[0]
         if isinstance(top,list):
             top = top[0]
         for k,v in self.top_plot_attributes.items():
             setattr(top,k,v)
-        plot = layout(frames)
+        plot = gridplot(children = frames, ncols = ncols)
         return plot
 
-    def generate_plot_html(self, template_name = None) -> str:
+    def generate_plot_html(self, template_name = None, template_variables = {}, ncols = None) -> str:
         """
         Generate plot frames and write the contents into a python jinja template.
         """
         frames = self._generate_frames()
-        plot = self._generate_layout(frames)
+        plot = self._generate_layout(frames, ncols=ncols)
         if template_name is None: 
             template = JINJA_TEMPLATE_ENV.env.get_template("plot.jinja")
         else:
             template = JINJA_TEMPLATE_ENV.env.get_template(template_name)
 
-        html = file_html(plot, CDN, template=template)
+        if 'title' in template_variables.keys():
+            title = template_variables.pop('title')
+            html = file_html(plot, CDN, template=template, title=title, template_variables=template_variables)
+        else:
+            html = file_html(plot, CDN, template=template, template_variables=template_variables)
 
         return html
