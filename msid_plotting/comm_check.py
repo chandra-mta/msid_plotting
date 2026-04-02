@@ -1,11 +1,9 @@
-#!/usr/bin/env / proj/sot/ska3/flight/bin/python
-
 """
 Convenience functions for checking DSN Comm information using Kadi
 """
 
 #: Ska3
-import kadi.events
+from kadi.events import dsn_comms
 from cxotime import CxoTime
 
 #: Time
@@ -15,10 +13,10 @@ def comm_check(checktime = None):
     if checktime is None:
         checktime = CxoTime() #: Checking the current time
 
-    dsn_query = kadi.events.dsn_comms.filter(start=checktime)
+    dsn_query = dsn_comms.filter(start=checktime, stop = "3d")
     comm = dsn_query[0] #: Upcomming or current comm
-    backstop_query = kadi.events.dsn_comms.filter(ifot_id = comm.ifot_id - 1)
-    previous_comm = backstop_query[0]
+    backstop_query = dsn_comms.filter(start="-3d", stop = checktime)
+    previous_comm = backstop_query[len(backstop_query) - 1] #: Previous comm. Negative indexing on QuerySet not supported.
     
     return {
         'comm': comm,
